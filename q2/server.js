@@ -2,38 +2,37 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 
-const ALLOWED_COMPONENTS = ["battery", "motor", "gps"];
+const allowedComponent = ["battery", "motor", "gps"];
 
 let logs = [];
 
 function validateLogEntry(entry) {
-  const errors = [];
 
-  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
-    return { valid: false, errors: ["Entry must be a JSON object"] };
+  if (entry === null || typeof entry !== "object") {
+    return { valid: false, error: "Entry must be a JSON object"};
   }
 
   const { timestamp, component, value } = entry;
 
   if (timestamp === undefined) {
-    errors.push("Missing field: timestamp");
+    return { valid: false, error: "Missing field: timestamp"};
   } else if (typeof timestamp !== "number" || Number.isNaN(timestamp)) {
-    errors.push("timestamp must be a number (ms since epoch)");
+    return { valid: false, error: "timestamp must be a number (ms since epoch)"};
   }
 
   if (component === undefined) {
-    errors.push("Missing field: component");
-  } else if (!ALLOWED_COMPONENTS.includes(component)) {
-    errors.push(`component must be one of: ${ALLOWED_COMPONENTS.join(", ")}`);
+    return { valid: false, error: "Missing field: component"};
+  } else if (!allowedComponent.includes(component)) {
+    return { valid: false, error: "component must be one of: battery, motor or gps"};
   }
 
   if (value === undefined) {
-    errors.push("Missing field: value");
+    return { valid: false, error: "Missing field: value"};
   } else if (typeof value !== "number" || Number.isNaN(value)) {
-    errors.push("value must be a valid number");
+    return { valid: false, error: "value must be a valid number"};
   }
 
-  return { valid: errors.length === 0, errors };
+  return { valid: true, error: ""};
 }
 
 app.post("/logs/upload", (req, res) => {
@@ -45,21 +44,15 @@ app.post("/logs/upload", (req, res) => {
     });
   }
 
-  if (body.length === 0) {
-    return res.status(400).json({
-      error: "Request body array must not be empty",
-    });
-  }
-
   const accepted = [];
   const rejected = [];
 
   body.forEach((entry, index) => {
-    const { valid, errors } = validateLogEntry(entry);
+    const { valid, error } = validateLogEntry(entry);
     if (valid) {
       accepted.push(entry);
     } else {
-      rejected.push({ index, entry, errors });
+      rejected.push({ index, entry, error});
     }
   });
 
@@ -89,23 +82,22 @@ app.get("/logs/summary", (req, res) => {
   for (const log of logs) {
     if (!components[log.component]) {
       components[log.component] = {
-        count: 0,
         min: log.value,
         max: log.value,
-        sum: 0,
+        avg: 0,
+        count: 0,
       };
     }
     const stats = components[log.component];
     stats.count += 1;
     stats.min = Math.min(stats.min, log.value);
     stats.max = Math.max(stats.max, log.value);
-    stats.sum += log.value;
+    stats.avg += log.value;
   }
 
   for (const key of Object.keys(components)) {
     const stats = components[key];
-    stats.avg = stats.sum / stats.count;
-    delete stats.sum;
+    stats.avg = stats.avg / stats.count;
   }
 
   const latest = logs.reduce((latestSoFar, log) =>
