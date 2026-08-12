@@ -1,3 +1,9 @@
+/*
+ * Uses an in-memory array to store valid logs, as no database is required.
+ * Each entry is validated for required fields, correct types, and valid components.
+ * Invalid entries return meaningful errors, while valid entries are stored.
+ */
+
 const express = require("express");
 const app = express();
 app.use(express.json());
